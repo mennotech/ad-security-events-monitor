@@ -2,6 +2,7 @@ param(
     [string]$Servers = "dc5,dc6"
 )
 
+$Interval = 5 #How often the script is run
 $ParsedEvents = @{}
 $HTML = ""
 
@@ -21,11 +22,11 @@ function Main {
 
 
 function Get-ADChangeEvents {
-    $StartTime = (Get-Date).AddMinutes(-15)
-    $StartTime = $StartTime.AddMinutes(- $StartTime.Minute % 15)
+    $StartTime = (Get-Date).AddMinutes(- $Interval)
+    $StartTime = $StartTime.AddMinutes(- $StartTime.Minute % $Interval)
     $StartTime = $StartTime.AddSeconds(- $StartTime.Second)
     $StartTime = $StartTime.AddMilliseconds(- $StartTime.Millisecond)
-    $EndTime = $StartTime.AddMinutes(15)
+    $EndTime = $StartTime.AddMinutes($Interval)
     $Filter = @{
         LogName='Security';
         ID = @(5136,5137,5139,5141);
