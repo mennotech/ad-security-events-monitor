@@ -123,8 +123,9 @@ function Get-ADChangeEvents {
             OldValue = $OldValue;
             NewValue = $NewValue;
             EventTime = $PrimaryEvent.event.system.timecreated.systemtime;
-            EventID = $PrimaryEvent.event.system.eventid
-            Event = $PrimaryEvent
+            EventID = $PrimaryEvent.event.system.eventid;
+            Computer = $PrimaryEvent.event.system.computer;
+            Event = $PrimaryEvent;
         }
         $MyEvents += $EventObj
 
@@ -146,7 +147,7 @@ function Get-ADChangeEvents {
             $Body += "<code>Removed: $($event.OldValue)</code>`n"
         }
         if ($Debug) { $Body += Convert-EventDataToHtmlTable -XmlPath 'Data' -EventObject $event.event }
-        $Body += "<p>Changed $($event.EventTime) by <strong>$($event.SubjectUserName)</strong></p>`n"
+        $Body += "<p>Changed $($event.EventTime) by <strong>$($event.SubjectUserName)</strong> @$($event.Computer)</p>`n"
         $Body += "<hr />`n"
     }
     return $Body
