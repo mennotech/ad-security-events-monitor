@@ -126,7 +126,7 @@ function Get-ADChangeEvents {
         $Body +=  "<h3>$($event.EventAction) : $($event.ObjectDN)</h3>`n"
         $Body += "<p>$($event.ObjectClass) : <strong>$($event.AttributeChanged)</strong></p>`n"
         if ($event.OldValue -AND $event.NewValue) {
-            $Body += "<code>$($event.OldValue)<br/>------&gt;<<br/>$($event.NewValue)</code>`n"
+            $Body += "<code>$($event.OldValue)<br/>------&gt;<br/>$($event.NewValue)</code>`n"
         } elseif ($event.NewValue) {
             $Body += "<code>$($event.NewValue)</code>`n"
         }
