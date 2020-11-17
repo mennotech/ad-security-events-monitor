@@ -3,96 +3,137 @@ param(
 )
 
 $ParsedEvents = @{}
-$TotalADChanges = @()
+$HTML = ""
 
 
-$StartTime = (Get-Date).AddMinutes(-15)
-$StartTime = $StartTime.AddMinutes(- $StartTime.Minute % 15)
-$StartTime = $StartTime.AddSeconds(- $StartTime.Second)
-$StartTime = $StartTime.AddMilliseconds(- $StartTime.Millisecond)
-$EndTime = $StartTime.AddMinutes(15)
+function Main {
+    $HTML += Get-ADChangeEvents
+    Send-MailMessage `
+        -From 'roland.admin@steinbachchristian.ca' `
+        -To 'roland.penner@steinbachchristian.ca' `
+        -Subject 'AD Changed Attributes' `
+        -SmtpServer 'mail3.scs.internal' `
+        -BodyAsHtml:$true `
+        -Body $HTML
+    
+}
 
-$ServersObj = $Servers.split(",")
-foreach ($Server in $ServersObj) {
-    #Write-Host "Searching $server for events..."
+
+
+function Get-ADChangeEvents {
+    $StartTime = (Get-Date).AddMinutes(-15)
+    $StartTime = $StartTime.AddMinutes(- $StartTime.Minute % 15)
+    $StartTime = $StartTime.AddSeconds(- $StartTime.Second)
+    $StartTime = $StartTime.AddMilliseconds(- $StartTime.Millisecond)
+    $EndTime = $StartTime.AddMinutes(15)
     $Filter = @{
         LogName='Security';
         ID = 5136;
-        StartTime = $StartTime;
-        EndTime = $EndTime;
+        #StartTime = $StartTime;
+        #EndTime = $EndTime;
     }
-    [xml[]]$ADChanges = Get-WinEvent -FilterHashtable $filter -ErrorAction SilentlyContinue -ComputerName $Server | ForEach-Object { $_.ToXml() }
-    if ($ADChanges.count) {
-        $TotalADChanges = $TotalADChanges + $ADChanges
-    }
+
+    $Events = Get-ServerWinEvents -ServersList $Servers -Filter $Filter
     
-}
-if (!$TotalADChanges.Count) {
-    Write-Host "No events found"
-    exit
-}
-
-#Enumerate XML Namespace
-$NameSpace = New-Object System.Xml.XmlNamespaceManager($TotalADChanges[0].NameTable)
-$NameSpace.AddNamespace("ns", $TotalADChanges[0].DocumentElement.NamespaceURI)
-
-#Join events by correlationID
-foreach ($event in $TotalADChanges) {
-    $match = @{}
-    $CorrelationID = ($event.SelectNodes("//ns:Data[@Name='OpCorrelationID']",$NameSpace)).'#text'
-    $OperationType = ($event.SelectNodes("//ns:Data[@Name='OperationType']",$NameSpace)).'#text'
-    if ($ParsedEvents[$CorrelationID]) {
-        $match = $ParsedEvents[$CorrelationID]
+    if (!$Events.Count) {
+        Write-Host "No events found"
+        exit
     }
-    switch ($OperationType) {
-        "%%14675" {
-            $match['old'] = $event
+
+    #Enumerate XML Namespace
+    $NameSpace = New-Object System.Xml.XmlNamespaceManager($Events[0].NameTable)
+    $NameSpace.AddNamespace("ns", $Events[0].DocumentElement.NamespaceURI)
+
+    #Join events by correlationID
+    foreach ($event in $Events) {
+        $match = @{}
+        $CorrelationID = ($event.SelectNodes("//ns:Data[@Name='OpCorrelationID']",$NameSpace)).'#text'
+        $OperationType = ($event.SelectNodes("//ns:Data[@Name='OperationType']",$NameSpace)).'#text'
+        if ($ParsedEvents[$CorrelationID]) {
+            $match = $ParsedEvents[$CorrelationID]
         }
-        "%%14674"{
-            $match['new'] = $event
+        switch ($OperationType) {
+            "%%14675" {
+                $match['old'] = $event
+            }
+            "%%14674"{
+                $match['new'] = $event
+            }
         }
+        $ParsedEvents[$CorrelationID] = $match
     }
-    $ParsedEvents[$CorrelationID] = $match
+
+    #Convert events into objects
+    $MyEvents = @()
+    foreach ($event in $ParsedEvents.values) {
+        if ($event.old) {
+            [string]$Old = $event.old.SelectNodes("//ns:Data[@Name='AttributeValue']",$NameSpace).'#text'
+        } else {
+            $Old = ""
+        }
+        $EventObj = [pscustomobject]@{
+            AttributeChanged = ($event.new.SelectNodes("//ns:Data[@Name='AttributeLDAPDisplayName']",$NameSpace).'#text');
+            ObjectDN = ($event.new.SelectNodes("//ns:Data[@Name='ObjectDN']",$NameSpace).'#text');
+            SubjectUserName = ($event.new.SelectNodes("//ns:Data[@Name='SubjectUserName']",$NameSpace).'#text');
+            Old = $Old;
+            New = ($event.new.SelectNodes("//ns:Data[@Name='AttributeValue']",$NameSpace).'#text');
+            EventTime = $event.new.event.system.timecreated.systemtime;
+            Event = $event.new;       
+        }
+        $MyEvents += $EventObj
+
+    }
+
+    #Sort Objects
+    $MyEvents = $MyEvents | Sort-Object EventTime -Descending
+
+    #Output Message
+    $Body = ""
+    foreach ($event in $MyEvents) {
+        $Body +=  "<h3>$($event.ObjectDN)</h3>`n"
+        $Body += "<p><strong>$($event.AttributeChanged)</strong></p>`n"
+        $Body += "<code>$($event.Old) ==> $($event.New)</code>`n"
+        $Body += "<p>Changed $($event.EventTime) by <strong>$($event.SubjectUserName)</strong></p>`n"
+        #$Body += Convert-EventDataToHtmlTable -EventObject $event.event -XmlPath "Data"
+        $Body += "<hr />`n"
+    }
+    return $Body
 }
 
-#Convert events into objects
-$MyEvents = @()
-foreach ($event in $ParsedEvents.values) {
-    if ($event.old) {
-        [string]$Old = $event.old.SelectNodes("//ns:Data[@Name='AttributeValue']",$NameSpace).'#text'
+function Convert-EventDataToHtmlTable {
+    param (
+        $EventObject,
+        $XmlPath
+    )
+    $TableHTML = ""
+    $NameSpace = New-Object System.Xml.XmlNamespaceManager($EventObject.NameTable)
+    $NameSpace.AddNamespace("ns", $EventObject.DocumentElement.NamespaceURI)
+    $Data = $EventObject.SelectNodes("//ns:$XmlPath",$NameSpace)
+    foreach ($row in $Data) {
+        $TableHTML += "<tr><td>$($row.Name)</td><td>$($row.'#text')</td></tr>`n"
+    }
+    if ($TableHTML) {
+        return "<table>`n<tr><th>Name</th><th>Value</th></tr>`n$TableHTML</table>"
     } else {
-        $Old = ""
+        return
     }
-    $EventObj = [pscustomobject]@{
-        AttributeChanged = ($event.new.SelectNodes("//ns:Data[@Name='AttributeLDAPDisplayName']",$NameSpace).'#text');
-        ObjectDN = ($event.new.SelectNodes("//ns:Data[@Name='ObjectDN']",$NameSpace).'#text');
-        SubjectUserName = ($event.new.SelectNodes("//ns:Data[@Name='SubjectUserName']",$NameSpace).'#text');
-        Old = $Old;
-        New = ($event.new.SelectNodes("//ns:Data[@Name='AttributeValue']",$NameSpace).'#text');
-        EventTime = $event.new.event.system.timecreated.systemtime;
-        Event = $event.new;       
-    }
-    $MyEvents += $EventObj
-
 }
 
-#Sort Objects
-$MyEvents = $MyEvents | Sort-Object EventTime -Descending
-
-#Output Message
-$Body = ""
-foreach ($event in $MyEvents) {
-    $Body +=  "<h3>$($event.ObjectDN)</h3>`n"
-    $Body += "<p><strong>$($event.AttributeChanged)</strong></p>`n"
-    $Body += "<code>$($event.Old) ==> $($event.New)</code>`n"
-    $Body += "<p>Changed $($event.EventTime) by <strong>$($event.SubjectUserName)</strong></p>`n"
-    $Body += "<hr />`n"
+function Get-ServerWinEvents {
+    param (
+        [string]$ServersList,
+        [object]$Filter
+    )
+    $TotalWinEvents = @()
+    $ServersArray = $ServersList.split(",")
+    foreach ($Server in $ServersArray) {
+        [xml[]]$WinEvents = Get-WinEvent -FilterHashtable $filter -ErrorAction SilentlyContinue -ComputerName $Server | ForEach-Object { $_.ToXml() }
+        if ($WinEvents.count) {
+            $TotalWinEvents = $TotalWinEvents + $WinEvents
+        }    
+    }
+    return $TotalWinEvents
 }
 
-Send-MailMessage `
-    -From 'roland.admin@steinbachchristian.ca' `
-    -To 'roland.penner@steinbachchristian.ca' `
-    -Subject 'AD Changed Attributes' `
-    -SmtpServer 'mail3.scs.internal' `
-    -BodyAsHtml:$true `
-    -Body $Body
+
+Main
