@@ -5,6 +5,7 @@ param(
 $Interval = 5 #How often the script is run
 $ParsedEvents = @{}
 $HTML = ""
+$Debug = $false
 
 
 function Main {
@@ -72,16 +73,27 @@ function Get-ADChangeEvents {
     #Convert events into objects
     $MyEvents = @()
     foreach ($event in $ParsedEvents.values) {
-        if ($event.old) {
-            [string]$OldValue = $event.old.SelectNodes("//ns:Data[@Name='AttributeValue']",$NameSpace).'#text'
-        } else {
+        if ($event.new) {
             $OldValue = ""
+            $NewValue = $event.new.SelectNodes("//ns:Data[@Name='AttributeValue']",$NameSpace).'#text'
+            $ObjectDN = ($event.new.SelectNodes("//ns:Data[@Name='ObjectDN']",$NameSpace).'#text')
+            $AttributeChanged = ($event.new.SelectNodes("//ns:Data[@Name='AttributeLDAPDisplayName']",$NameSpace).'#text')    
+            $PrimaryEvent = $event.new
+        } elseif ($event.old) {
+            $OldValue = $event.old.SelectNodes("//ns:Data[@Name='AttributeValue']",$NameSpace).'#text'    
+            $NewValue = ""
+            $ObjectDN = ($event.old.SelectNodes("//ns:Data[@Name='ObjectDN']",$NameSpace).'#text')
+            $AttributeChanged = ($event.old.SelectNodes("//ns:Data[@Name='AttributeLDAPDisplayName']",$NameSpace).'#text')                
+            $PrimaryEvent = $event.old
         }
-        [String]$NewValue = $event.new.SelectNodes("//ns:Data[@Name='AttributeValue']",$NameSpace).'#text'
-        $ObjectDN = ($event.new.SelectNodes("//ns:Data[@Name='ObjectDN']",$NameSpace).'#text')
-        $AttributeChanged = ($event.new.SelectNodes("//ns:Data[@Name='AttributeLDAPDisplayName']",$NameSpace).'#text')
+        if ($event.old -AND $event.new) {
+            $OldValue = $event.old.SelectNodes("//ns:Data[@Name='AttributeValue']",$NameSpace).'#text'
+            $PrimaryEvent = $event.new
+        }
         
-        switch ($event.new.event.system.eventid) {
+
+        
+        switch ($PrimaryEvent.event.system.eventid) {
             5136 {
                 $EventAction = 'Modified'
             }
@@ -90,29 +102,29 @@ function Get-ADChangeEvents {
             }
             5139 {
                 $EventAction = 'Moved'
-                $OldValue = ($event.new.SelectNodes("//ns:Data[@Name='OldObjectDN']",$NameSpace).'#text')
-                $NewValue = ($event.new.SelectNodes("//ns:Data[@Name='NewObjectDN']",$NameSpace).'#text')
-                $ObjectDN = ($event.new.SelectNodes("//ns:Data[@Name='OldObjectDN']",$NameSpace).'#text')
+                $OldValue = ($PrimaryEvent.SelectNodes("//ns:Data[@Name='OldObjectDN']",$NameSpace).'#text')
+                $NewValue = ($PrimaryEvent.SelectNodes("//ns:Data[@Name='NewObjectDN']",$NameSpace).'#text')
+                $ObjectDN = ($PrimaryEvent.SelectNodes("//ns:Data[@Name='OldObjectDN']",$NameSpace).'#text')
             }
             5141 {
                 $EventAction = 'Deleted'
             }
             default {
-                $EventAction = "Unknown: $($event.new.system.eventid)"                
+                $EventAction = "Unknown: $($PrimaryEvent.system.eventid)"                
             }
         }
 
         $EventObj = [pscustomobject]@{
             ObjectDN = $ObjectDN;
-            ObjectClass = ($event.new.SelectNodes("//ns:Data[@Name='ObjectClass']",$NameSpace).'#text');
-            SubjectUserName = ($event.new.SelectNodes("//ns:Data[@Name='SubjectUserName']",$NameSpace).'#text');
+            ObjectClass = ($PrimaryEvent.SelectNodes("//ns:Data[@Name='ObjectClass']",$NameSpace).'#text');
+            SubjectUserName = ($PrimaryEvent.SelectNodes("//ns:Data[@Name='SubjectUserName']",$NameSpace).'#text');
             EventAction = $EventAction;
             AttributeChanged = $AttributeChanged;
             OldValue = $OldValue;
             NewValue = $NewValue;
-            EventTime = $event.new.event.system.timecreated.systemtime;
-            EventID = $event.new.event.system.eventid
-            Event = $event.new
+            EventTime = $PrimaryEvent.event.system.timecreated.systemtime;
+            EventID = $PrimaryEvent.event.system.eventid
+            Event = $PrimaryEvent
         }
         $MyEvents += $EventObj
 
@@ -129,7 +141,9 @@ function Get-ADChangeEvents {
         if ($event.OldValue -AND $event.NewValue) {
             $Body += "<code>$($event.OldValue)<br/>------&gt;<br/>$($event.NewValue)</code>`n"
         } elseif ($event.NewValue) {
-            $Body += "<code>$($event.NewValue)</code>`n"
+            $Body += "<code>Added: $($event.NewValue)</code>`n"
+        } elseif ($event.OldValue) {
+            $Body += "<code>Removed: $($event.OldValue)</code>`n"
         }
         if ($Debug) { $Body += Convert-EventDataToHtmlTable -XmlPath 'Data' -EventObject $event.event }
         $Body += "<p>Changed $($event.EventTime) by <strong>$($event.SubjectUserName)</strong></p>`n"
