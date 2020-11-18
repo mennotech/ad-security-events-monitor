@@ -134,6 +134,15 @@ function Get-ADChangeEvents {
     #Sort Objects
     $MyEvents = $MyEvents | Sort-Object EventTime -Descending
 
+    #Remove "computer" "servicePrincipalName" events
+    $MyEvents = $MyEvents | Where-Object {!($_.AttributeChanged -eq 'servicePrincipalName' -AND $_.ObjectClass -eq 'computer')}
+
+    #Exits if no events left
+    if (!$MyEvents.count) {
+        Write-Host "No matching events found"
+        exit
+    }
+
     #Output Message
     $Body = ""
     foreach ($event in $MyEvents) {
