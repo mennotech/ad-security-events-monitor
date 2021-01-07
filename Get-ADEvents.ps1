@@ -136,6 +136,8 @@ function Get-ADChangeEvents {
 
     #Remove "computer" "servicePrincipalName" events
     $MyEvents = $MyEvents | Where-Object {!($_.AttributeChanged -eq 'servicePrincipalName' -AND $_.ObjectClass -eq 'computer')}
+    #Remove DNS Events
+    $MyEvents = $MyEvents | Where-Object {!($_.ObjectDN -like '*cn=MicrosoftDNS,DC=DomainDnsZones,DC=scs,DC=internal')}
 
     #Exits if no events left
     if (!$MyEvents.count) {
