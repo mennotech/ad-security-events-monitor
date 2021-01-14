@@ -37,7 +37,7 @@ function Get-ADChangeEvents {
 
     $Events = @(Get-ServerWinEvents -ServersList $Servers -Filter $Filter)
     
-    if (!$Events.count) {
+    if (!$($Events | Measure).count) {
         Write-Host "No events found"
         exit
     }
@@ -140,7 +140,7 @@ function Get-ADChangeEvents {
     $MyEvents = $MyEvents | Where-Object {!($_.ObjectDN -like '*cn=MicrosoftDNS,DC=DomainDnsZones,DC=scs,DC=internal')}
 
     #Exits if no events left
-    if (!$MyEvents.count) {
+    if (!$($MyEvents | measure).count) {
         Write-Host "No matching events found"
         exit
     }
