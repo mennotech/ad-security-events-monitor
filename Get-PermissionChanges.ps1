@@ -75,6 +75,9 @@ function Get-PermissionChangeEvents {
     $MyEvents = $MyEvents | Where-Object { $_.ObjectType -ne 'Token' }
     #$MyEvents | ft
 
+    #Remove Teams tmp files
+    $MyEvents = $MyEvents | Where-Object { $_.ObjectType -notlike '*\Application Data\Microsoft\Teams\tmp\x64.json'}
+
     #Process Access Change
     foreach ($event in $MyEvents) {
         $event.SdDiff = Compare-SD -OldSd $event.OldSd -NewSd $event.NewSd
