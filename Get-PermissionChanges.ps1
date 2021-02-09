@@ -75,8 +75,8 @@ function Get-PermissionChangeEvents {
     $MyEvents = $MyEvents | Where-Object { $_.ObjectType -ne 'Token' }
     #$MyEvents | ft
 
-    #Remove Teams tmp files
-    $MyEvents = $MyEvents | Where-Object { $_.ObjectName -notlike '*\Application Data\Microsoft\Teams\tmp\x64.json'}
+    #Remove Application Data files
+    $MyEvents = $MyEvents | Where-Object { $_.ObjectName -notlike '*\Application Data\*'}
 
     #Process Access Change
     foreach ($event in $MyEvents) {
