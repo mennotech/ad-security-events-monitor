@@ -1,8 +1,17 @@
-param(
-    [string]$Servers = "dc5,dc6"
-)
+#Load current script path
+$PSScriptRootFolder = Split-Path -Parent -Path $MyInvocation.MyCommand.Definition
+write-host $PSScriptRootFolder
 
-$Interval = 5 #How often the script is run
+try {
+ . ("$PSScriptRootFolder\config\Settings.ps1")
+}
+catch {
+    Write-Error "Failed to load configuration file"
+    exit -1
+}
+
+
+
 $ParsedEvents = @{}
 $HTML = ""
 $Debug = $false
@@ -11,10 +20,10 @@ $Debug = $false
 function Main {
     $HTML += Get-ADChangeEvents
     Send-MailMessage `
-        -From 'roland.admin@steinbachchristian.ca' `
-        -To 'roland.penner@steinbachchristian.ca' `
+        -From $SMTPFrom `
+        -To $SMTPTo `
         -Subject 'AD Changed Attributes' `
-        -SmtpServer 'mail3.scs.internal' `
+        -SmtpServer $SMTPMailServer `
         -BodyAsHtml:$true `
         -Body $HTML 
 
