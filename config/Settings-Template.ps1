@@ -16,6 +16,6 @@ $IgnoreDN = @(
     "*cn=MicrosoftDNS,DC=DomainDnsZones,DC=demo,DC=com"
     )
 
-$IgnoreObjectAttributes @(
+$IgnoreObjectAttributes = @(
     "computer:servicePrincipalName"
     )
