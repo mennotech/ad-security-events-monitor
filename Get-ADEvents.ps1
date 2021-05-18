@@ -146,9 +146,13 @@ function Get-ADChangeEvents {
     #Sort Objects
     $MyEvents = $MyEvents | Sort-Object EventTime -Descending
 
-    #Remove "computer" "servicePrincipalName" events
-    $MyEvents = $MyEvents | Where-Object {!($_.AttributeChanged -eq 'servicePrincipalName' -AND $_.ObjectClass -eq 'computer')}
-    #Remove DNS Events
+    #Remove matches in $IgnoreObjectAttributes array
+    foreach ($Match in $IgnoreObjectAttributes) {
+        $ObjectClass, $AttributeName = $Match.Split(":");
+        $MyEvents = $MyEvents | Where-Object {!($_.ObjectClass -eq $ObjectClass -AND $_.AttributeChanged -eq $AttributeName)}
+    }
+    
+    #Remove matches in $IgnoreDN array
     foreach ($Match in $IgnoreDN) {
         $MyEvents = $MyEvents | Where-Object {!($_.ObjectDN -like $Match)}
     }
