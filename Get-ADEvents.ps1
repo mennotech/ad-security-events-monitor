@@ -1,3 +1,7 @@
+param (
+    [boolean]$Debug = $false
+)
+
 #Load current script path
 $PSScriptRootFolder = Split-Path -Parent -Path $MyInvocation.MyCommand.Definition
 write-host $PSScriptRootFolder
@@ -14,7 +18,6 @@ catch {
 
 $ParsedEvents = @{}
 $HTML = ""
-$Debug = $false
 
 
 function Main {
@@ -146,14 +149,18 @@ function Get-ADChangeEvents {
     #Remove "computer" "servicePrincipalName" events
     $MyEvents = $MyEvents | Where-Object {!($_.AttributeChanged -eq 'servicePrincipalName' -AND $_.ObjectClass -eq 'computer')}
     #Remove DNS Events
-    $MyEvents = $MyEvents | Where-Object {!($_.ObjectDN -like '*cn=MicrosoftDNS,DC=DomainDnsZones,DC=scs,DC=internal')}
+    foreach ($Match in $IgnoreDN) {
+        $MyEvents = $MyEvents | Where-Object {!($_.ObjectDN -like $Match)}
+    }
 
     #Exits if no events left
-    if (!$($MyEvents | measure).count) {
+    if (!$($MyEvents | Measure-Object).count) {
         Write-Host "No matching events found"
         exit
     }
 
+    #Write to host if debug mode
+    if ($Debug) { Write-Host ($MyEvents | Out-String) }
     #Output Message
     $Body = ""
     foreach ($event in $MyEvents) {
