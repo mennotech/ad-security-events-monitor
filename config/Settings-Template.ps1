@@ -15,3 +15,7 @@ $IgnoreDN = @(
     "CN=GroupName,OU=Groups,DC=demo,DC=com",
     "*cn=MicrosoftDNS,DC=DomainDnsZones,DC=demo,DC=com"
     )
+
+$IgnoreObjectAttributes @(
+    "computer:servicePrincipalName"
+    )
