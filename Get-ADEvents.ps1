@@ -7,7 +7,7 @@ $PSScriptRootFolder = Split-Path -Parent -Path $MyInvocation.MyCommand.Definitio
 write-host $PSScriptRootFolder
 
 try {
- . ("$PSScriptRootFolder\config\Settings.ps1")
+ . ("$PSScriptRootFolder\config\ADEvents-Settings.ps1")
 }
 catch {
     Write-Error "Failed to load configuration file"
