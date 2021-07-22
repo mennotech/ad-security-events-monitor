@@ -49,7 +49,7 @@ function Get-ADChangeEvents {
 
     $Events = @(Get-ServerWinEvents -ServersList $Servers -Filter $Filter)
     
-    if (!$($Events | Measure).count) {
+    if (!$($Events | Measure-Object).count) {
         Write-Host "No events found"
         exit
     }
