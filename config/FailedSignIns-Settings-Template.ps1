@@ -1,12 +1,12 @@
 #Script Configurations
-#Copy template file a rename to Settings.ps1
+#Copy template file a rename to FailedSignIns-Settings.ps1
 
 #Comma separated list of servers
-$Servers = "apps4.scs.internal"
+$Servers = "server1,server2"
 
-$Interval = 120 #How often the script is run in minutes
+$Interval = 5 #How often the script is run in minutes
 
-$SMTPFrom = 'admin@steinbachchristian.ca'
-$SMTPTo = 'roland.penner@steinbachchristian.ca'
-$SMTPMailServer = 'mail.scschools.ca'
+$SMTPFrom = 'email@address.com'
+$SMTPTo = 'email@address.com'
+$SMTPMailServer = 'mailserver'
 
