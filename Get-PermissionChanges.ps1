@@ -1,24 +1,31 @@
-param(
-    [string]$Servers = "files"
+param (
+    [boolean]$Debug = $false
 )
 
-$Interval = 5 #How often the script is run
-$ParsedEvents = @{}
-$HTML = ""
-$Debug = $false
+#Load current script path
+$PSScriptRootFolder = Split-Path -Parent -Path $MyInvocation.MyCommand.Definition
+write-host $PSScriptRootFolder
 
+try {
+ . ("$PSScriptRootFolder\config\PermissionChanges-Settings.ps1")
+}
+catch {
+    Write-Error "Failed to load configuration file"
+    exit -1
+}
+
+
+$HTML = ""
 
 function Main {
     $HTML += Get-PermissionChangeEvents
-    $HTML    
-    Send-MailMessage `
-        -From 'roland.admin@steinbachchristian.ca' `
-        -To 'roland.penner@steinbachchristian.ca' `
+     Send-MailMessage `
+        -From $SMTPFrom `
+        -To $SMTPTo `
         -Subject 'Server File Permissions Changed' `
-        -SmtpServer 'mail3.scs.internal' `
+        -SmtpServer $SMTPMailServer `
         -BodyAsHtml:$true `
         -Body $HTML 
-
 }
 
 
