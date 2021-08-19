@@ -40,7 +40,7 @@ function Get-FailedSignInEvents {
     $EndTime = $StartTime.AddMinutes($Interval)
     $Filter = @{
         LogName='Security';
-        ID = 4625;
+        ID = 4625,4740;
         StartTime = $StartTime;
         EndTime = $EndTime;
     }
