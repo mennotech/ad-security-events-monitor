@@ -96,6 +96,7 @@ function Get-FailedSignInEvents {
     foreach ($event in $MyEvents) {
         $Body +=  "<h3>$($event.Computer) : $($event.TargetDomainName) \ $($event.TargetUserName) @ $($event.IpAddress) </h3>`n"
         $Body += "<p>$($event.EventTime)</p>`n"
+        $Body += "<p><strong>ID:</strong> $($event.EventID)</p>`n"
         $Body += Convert-EventDataToHtmlTable -XmlPath 'Data' -EventObject $event.event
         $Body += "<hr />`n"
     }
