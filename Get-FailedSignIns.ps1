@@ -59,20 +59,41 @@ function Get-FailedSignInEvents {
     $MyEvents = @()
     #Process Events
     foreach ($event in $Events) {
-        $EventObj = [pscustomobject]@{
-            TargetUserName = $Event.SelectNodes("//ns:Data[@Name='TargetUserName']",$NameSpace).'#text';
-            TargetDomainName = $Event.SelectNodes("//ns:Data[@Name='TargetDomainName']",$NameSpace).'#text';
-            LogonType = $Event.SelectNodes("//ns:Data[@Name='LogonType']",$NameSpace).'#text';
-            Status = $Event.SelectNodes("//ns:Data[@Name='Status']",$NameSpace).'#text';
-            SubStatus = $Event.SelectNodes("//ns:Data[@Name='SubStatus']",$NameSpace).'#text';
-            AuthenticationPackageName = $Event.SelectNodes("//ns:Data[@Name='AuthenticationPackageName']",$NameSpace).'#text';
-            IpAddress = $Event.SelectNodes("//ns:Data[@Name='IpAddress']",$NameSpace).'#text';
-            IpPort = $Event.SelectNodes("//ns:Data[@Name='IpPort']",$NameSpace).'#text';
-            EventTime = $Event.event.system.timecreated.systemtime;
-            EventID = $Event.event.system.eventid;
-            Computer = $Event.event.system.computer;
-            Event = $Event;
+        switch ($Event.event.system.eventid) {
+            4740 { #Account Lock Out
+                $EventObj = [pscustomobject]@{
+                    TargetUserName = $Event.SelectNodes("//ns:Data[@Name='TargetUserName']",$NameSpace).'#text';
+                    TargetDomainName = $Event.SelectNodes("//ns:Data[@Name='TargetDomainName']",$NameSpace).'#text';
+                    LogonType = ""
+                    Status = ""
+                    SubStatus = ""
+                    AuthenticationPackageName = ""
+                    IpAddress = ""
+                    IpPort = ""
+                    EventTime = $Event.event.system.timecreated.systemtime;
+                    EventID = $Event.event.system.eventid;
+                    Computer = $Event.event.system.computer;
+                    Event = $Event;
+                }
+            }
+            4625 { #Failed Auth
+                $EventObj = [pscustomobject]@{
+                    TargetUserName = $Event.SelectNodes("//ns:Data[@Name='TargetUserName']",$NameSpace).'#text';
+                    TargetDomainName = $Event.SelectNodes("//ns:Data[@Name='TargetDomainName']",$NameSpace).'#text';
+                    LogonType = $Event.SelectNodes("//ns:Data[@Name='LogonType']",$NameSpace).'#text';
+                    Status = $Event.SelectNodes("//ns:Data[@Name='Status']",$NameSpace).'#text';
+                    SubStatus = $Event.SelectNodes("//ns:Data[@Name='SubStatus']",$NameSpace).'#text';
+                    AuthenticationPackageName = $Event.SelectNodes("//ns:Data[@Name='AuthenticationPackageName']",$NameSpace).'#text';
+                    IpAddress = $Event.SelectNodes("//ns:Data[@Name='IpAddress']",$NameSpace).'#text';
+                    IpPort = $Event.SelectNodes("//ns:Data[@Name='IpPort']",$NameSpace).'#text';
+                    EventTime = $Event.event.system.timecreated.systemtime;
+                    EventID = $Event.event.system.eventid;
+                    Computer = $Event.event.system.computer;
+                    Event = $Event;
+                }
+            }
         }
+ 
         $MyEvents += $EventObj
 
     }
