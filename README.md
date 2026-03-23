@@ -111,7 +111,7 @@ jobs:
       CODESIGN_PFX_BASE64: ${{ secrets.CODESIGN_PFX_BASE64 }}
       CODESIGN_PFX_PASSWORD: ${{ secrets.CODESIGN_PFX_PASSWORD }}
     with:
-      runner_group: SCS Domain Controllers   # name of your self-hosted runner group on the domain controllers
+      runner_group: Domain Controllers   # name of your self-hosted runner group on the domain controllers
       destination_path: C:\Scripts\ad-security-events-monitor
       exclude_dirs:                           # comma-separated list of directories to skip; leave empty to include all
       exclude_files: '*Settings.ps1'
