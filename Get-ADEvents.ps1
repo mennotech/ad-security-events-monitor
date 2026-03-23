@@ -20,15 +20,26 @@ $ParsedEvents = @{}
 $HTML = ""
 
 
+function ConvertTo-HtmlEncoded {
+    param ([string]$Value)
+    if ([string]::IsNullOrEmpty($Value)) { return $Value }
+    return $Value.Replace('&', '&amp;').Replace('<', '&lt;').Replace('>', '&gt;').Replace('"', '&quot;').Replace("'", '&#39;')
+}
+
+
 function Main {
     $HTML += Get-ADChangeEvents
-    Send-MailMessage `
-        -From $SMTPFrom `
-        -To $SMTPTo `
-        -Subject 'AD Changed Attributes' `
-        -SmtpServer $SMTPMailServer `
-        -BodyAsHtml:$true `
-        -Body $HTML 
+    try {
+        Send-MailMessage `
+            -From $SMTPFrom `
+            -To $SMTPTo `
+            -Subject 'AD Changed Attributes' `
+            -SmtpServer $SMTPMailServer `
+            -BodyAsHtml:$true `
+            -Body $HTML
+    } catch {
+        Write-Error "Failed to send email alert: $_"
+    }
 
 }
 
@@ -168,17 +179,17 @@ function Get-ADChangeEvents {
     #Output Message
     $Body = ""
     foreach ($event in $MyEvents) {
-        $Body +=  "<h3>$($event.EventAction) : $($event.ObjectDN)</h3>`n"
-        $Body += "<p>$($event.ObjectClass) : <strong>$($event.AttributeChanged)</strong></p>`n"
+        $Body +=  "<h3>$(ConvertTo-HtmlEncoded $event.EventAction) : $(ConvertTo-HtmlEncoded $event.ObjectDN)</h3>`n"
+        $Body += "<p>$(ConvertTo-HtmlEncoded $event.ObjectClass) : <strong>$(ConvertTo-HtmlEncoded $event.AttributeChanged)</strong></p>`n"
         if ($event.OldValue -AND $event.NewValue) {
-            $Body += "<code>$($event.OldValue)<br/>------&gt;<br/>$($event.NewValue)</code>`n"
+            $Body += "<code>$(ConvertTo-HtmlEncoded $event.OldValue)<br/>------&gt;<br/>$(ConvertTo-HtmlEncoded $event.NewValue)</code>`n"
         } elseif ($event.NewValue) {
-            $Body += "<code>Added: $($event.NewValue)</code>`n"
+            $Body += "<code>Added: $(ConvertTo-HtmlEncoded $event.NewValue)</code>`n"
         } elseif ($event.OldValue) {
-            $Body += "<code>Removed: $($event.OldValue)</code>`n"
+            $Body += "<code>Removed: $(ConvertTo-HtmlEncoded $event.OldValue)</code>`n"
         }
         if ($Debug) { $Body += Convert-EventDataToHtmlTable -XmlPath 'Data' -EventObject $event.event }
-        $Body += "<p>Changed $($event.EventTime) by <strong>$($event.SubjectUserName)</strong> @$($event.Computer)</p>`n"
+        $Body += "<p>Changed $(ConvertTo-HtmlEncoded $event.EventTime) by <strong>$(ConvertTo-HtmlEncoded $event.SubjectUserName)</strong> @$(ConvertTo-HtmlEncoded $event.Computer)</p>`n"
         $Body += "<hr />`n"
     }
     return $Body
@@ -194,7 +205,7 @@ function Convert-EventDataToHtmlTable {
     $NameSpace.AddNamespace("ns", $EventObject.DocumentElement.NamespaceURI)
     $Data = $EventObject.SelectNodes("//ns:$XmlPath",$NameSpace)
     foreach ($row in $Data) {
-        $TableHTML += "<tr><td>$($row.Name)</td><td>$($row.'#text')</td></tr>`n"
+        $TableHTML += "<tr><td>$(ConvertTo-HtmlEncoded $row.Name)</td><td>$(ConvertTo-HtmlEncoded $row.'#text')</td></tr>`n"
     }
     if ($TableHTML) {
         return "<table>`n<tr><th>Name</th><th>Value</th></tr>`n$TableHTML</table>"
@@ -211,6 +222,11 @@ function Get-ServerWinEvents {
     $TotalWinEvents = @()
     $ServersArray = $ServersList.split(",")
     foreach ($Server in $ServersArray) {
+        $Server = $Server.Trim()
+        if ($Server -notmatch '^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$') {
+            Write-Warning "Skipping invalid server name: $Server"
+            continue
+        }
         [xml[]]$WinEvents = Get-WinEvent -FilterHashtable $filter -ErrorAction SilentlyContinue -ComputerName $Server | ForEach-Object { $_.ToXml() }
         if ($WinEvents.count) {
             $TotalWinEvents = $TotalWinEvents + $WinEvents

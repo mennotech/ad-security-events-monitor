@@ -19,15 +19,26 @@ catch {
 $HTML = ""
 
 
+function ConvertTo-HtmlEncoded {
+    param ([string]$Value)
+    if ([string]::IsNullOrEmpty($Value)) { return $Value }
+    return $Value.Replace('&', '&amp;').Replace('<', '&lt;').Replace('>', '&gt;').Replace('"', '&quot;').Replace("'", '&#39;')
+}
+
+
 function Main {
     $HTML += Get-FailedSignInEvents
-     Send-MailMessage `
-        -From $SMTPFrom `
-        -To $SMTPTo `
-        -Subject 'Failed Logon Events' `
-        -SmtpServer $SMTPMailServer `
-        -BodyAsHtml:$true `
-        -Body $HTML 
+    try {
+        Send-MailMessage `
+            -From $SMTPFrom `
+            -To $SMTPTo `
+            -Subject 'Failed Logon Events' `
+            -SmtpServer $SMTPMailServer `
+            -BodyAsHtml:$true `
+            -Body $HTML
+    } catch {
+        Write-Error "Failed to send email alert: $_"
+    }
 }
 
 
@@ -115,9 +126,9 @@ function Get-FailedSignInEvents {
     #Output Message
     $Body = ""
     foreach ($event in $MyEvents) {
-        $Body +=  "<h3>$($event.Computer) : $($event.TargetDomainName) \ $($event.TargetUserName) @ $($event.IpAddress) </h3>`n"
-        $Body += "<p>$($event.EventTime)</p>`n"
-        $Body += "<p><strong>ID:</strong> $($event.EventID)</p>`n"
+        $Body +=  "<h3>$(ConvertTo-HtmlEncoded $event.Computer) : $(ConvertTo-HtmlEncoded $event.TargetDomainName) \ $(ConvertTo-HtmlEncoded $event.TargetUserName) @ $(ConvertTo-HtmlEncoded $event.IpAddress) </h3>`n"
+        $Body += "<p>$(ConvertTo-HtmlEncoded $event.EventTime)</p>`n"
+        $Body += "<p><strong>ID:</strong> $(ConvertTo-HtmlEncoded $event.EventID)</p>`n"
         $Body += Convert-EventDataToHtmlTable -XmlPath 'Data' -EventObject $event.event
         $Body += "<hr />`n"
     }
@@ -134,7 +145,7 @@ function Convert-EventDataToHtmlTable {
     $NameSpace.AddNamespace("ns", $EventObject.DocumentElement.NamespaceURI)
     $Data = $EventObject.SelectNodes("//ns:$XmlPath",$NameSpace)
     foreach ($row in $Data) {
-        $TableHTML += "<tr><td>$($row.Name)</td><td>$($row.'#text')</td></tr>`n"
+        $TableHTML += "<tr><td>$(ConvertTo-HtmlEncoded $row.Name)</td><td>$(ConvertTo-HtmlEncoded $row.'#text')</td></tr>`n"
     }
     if ($TableHTML) {
         return "<table>`n<tr><th>Name</th><th>Value</th></tr>`n$TableHTML</table>"
@@ -151,6 +162,11 @@ function Get-ServerWinEvents {
     $TotalWinEvents = @()
     $ServersArray = $ServersList.split(",")
     foreach ($Server in $ServersArray) {
+        $Server = $Server.Trim()
+        if ($Server -notmatch '^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$') {
+            Write-Warning "Skipping invalid server name: $Server"
+            continue
+        }
         [xml[]]$WinEvents = Get-WinEvent -FilterHashtable $filter -ErrorAction SilentlyContinue -ComputerName $Server | ForEach-Object { $_.ToXml() }
         if ($WinEvents.count) {
             $TotalWinEvents = $TotalWinEvents + $WinEvents

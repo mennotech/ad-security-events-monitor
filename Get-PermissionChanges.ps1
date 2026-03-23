@@ -17,15 +17,25 @@ catch {
 
 $HTML = ""
 
+function ConvertTo-HtmlEncoded {
+    param ([string]$Value)
+    if ([string]::IsNullOrEmpty($Value)) { return $Value }
+    return $Value.Replace('&', '&amp;').Replace('<', '&lt;').Replace('>', '&gt;').Replace('"', '&quot;').Replace("'", '&#39;')
+}
+
 function Main {
     $HTML += Get-PermissionChangeEvents
-     Send-MailMessage `
-        -From $SMTPFrom `
-        -To $SMTPTo `
-        -Subject 'Server File Permissions Changed' `
-        -SmtpServer $SMTPMailServer `
-        -BodyAsHtml:$true `
-        -Body $HTML 
+    try {
+        Send-MailMessage `
+            -From $SMTPFrom `
+            -To $SMTPTo `
+            -Subject 'Server File Permissions Changed' `
+            -SmtpServer $SMTPMailServer `
+            -BodyAsHtml:$true `
+            -Body $HTML
+    } catch {
+        Write-Error "Failed to send email alert: $_"
+    }
 }
 
 
@@ -99,10 +109,10 @@ function Get-PermissionChangeEvents {
     #Output Message
     $Body = ""
     foreach ($event in $MyEvents) {
-        $Body +=  "<h3>$($event.ObjectType) - $($event.ObjectName)</h3>`n"
-        $Body += "<pre>`n$($event.SdDiff)</pre>`n"
+        $Body +=  "<h3>$(ConvertTo-HtmlEncoded $event.ObjectType) - $(ConvertTo-HtmlEncoded $event.ObjectName)</h3>`n"
+        $Body += "<pre>`n$(ConvertTo-HtmlEncoded $event.SdDiff)</pre>`n"
         if ($Debug) { $Body += Convert-EventDataToHtmlTable -XmlPath 'Data' -EventObject $event.event }
-        $Body += "<p>Changed $($event.EventTime) by <strong>$($event.SubjectUserName)</strong> @$($event.Computer)</p>`n"
+        $Body += "<p>Changed $(ConvertTo-HtmlEncoded $event.EventTime) by <strong>$(ConvertTo-HtmlEncoded $event.SubjectUserName)</strong> @$(ConvertTo-HtmlEncoded $event.Computer)</p>`n"
         $Body += "<hr />`n"
     }
     return $Body
@@ -158,8 +168,8 @@ function Compare-Sd {
         $Modified = $false
         Foreach ($Subtraction in $Subtractions) {
             $Subtraction = $Subtraction.Split(";")
-            if ($Subraction[0] -eq $Addition[0] -and $Subtraction[5] -eq $Addition[5]) {
-              $Modified = $Subraction;
+            if ($Subtraction[0] -eq $Addition[0] -and $Subtraction[5] -eq $Addition[5]) {
+              $Modified = $Subtraction;
             }
         }
         
@@ -184,7 +194,7 @@ function Compare-Sd {
         $Modified = $false
         Foreach ($Addition in $Additions) {
             $Addition = $Addition.Split(";")
-            if ($Subraction[0] -eq $Addition[0] -and $Subtraction[5] -eq $Addition[5]) {
+            if ($Subtraction[0] -eq $Addition[0] -and $Subtraction[5] -eq $Addition[5]) {
               $Modified = $Addition;
             }
         }
@@ -208,7 +218,7 @@ function Convert-EventDataToHtmlTable {
     $NameSpace.AddNamespace("ns", $EventObject.DocumentElement.NamespaceURI)
     $Data = $EventObject.SelectNodes("//ns:$XmlPath",$NameSpace)
     foreach ($row in $Data) {
-        $TableHTML += "<tr><td>$($row.Name)</td><td>$($row.'#text')</td></tr>`n"
+        $TableHTML += "<tr><td>$(ConvertTo-HtmlEncoded $row.Name)</td><td>$(ConvertTo-HtmlEncoded $row.'#text')</td></tr>`n"
     }
     if ($TableHTML) {
         return "<table>`n<tr><th>Name</th><th>Value</th></tr>`n$TableHTML</table>"
@@ -225,6 +235,11 @@ function Get-ServerWinEvents {
     $TotalWinEvents = @()
     $ServersArray = $ServersList.split(",")
     foreach ($Server in $ServersArray) {
+        $Server = $Server.Trim()
+        if ($Server -notmatch '^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$') {
+            Write-Warning "Skipping invalid server name: $Server"
+            continue
+        }
         [xml[]]$WinEvents = Get-WinEvent -FilterHashtable $filter -ErrorAction SilentlyContinue -ComputerName $Server | ForEach-Object { $_.ToXml() }
         if ($WinEvents.count) {
             $TotalWinEvents = $TotalWinEvents + $WinEvents
@@ -236,7 +251,13 @@ function Get-ServerWinEvents {
 function Convert-SidtoName {
 param ([string]$Sid)
 
-    $object = Get-AdObject -Filter "objectSid -eq '$sid'"
+    # Validate SID format before AD lookup to prevent LDAP injection
+    if ($Sid -notmatch '^S-1-\d+(-\d+)+$') {
+        return $Sid
+    }
+
+    $sidObject = New-Object System.Security.Principal.SecurityIdentifier($Sid)
+    $object = Get-AdObject -Identity $sidObject -ErrorAction SilentlyContinue
     if ($object) {
         return $object.Name
     } else {
@@ -255,52 +276,52 @@ param ([string]$Sid)
 
 #0 ACE Type A-Allowed,D-Denied,OA-Object Allowed,OD-Object Denied,AU-System Audit,AL-System Alarm,OU-Object Sys Audit,OL-Object Sys Alarm
 #============
-#“A” 	ACCESS ALLOWED
-#“D” 	ACCESS DENIED
-#“OA” 	OBJECT ACCESS ALLOWED: ONLY APPLIES TO A SUBSET OF THE OBJECT(S).
-#“OD” 	OBJECT ACCESS DENIED: ONLY APPLIES TO A SUBSET OF THE OBJECT(S).
-#“AU” 	SYSTEM AUDIT
-#“AL” 	SYSTEM ALARM
-#“OU” 	OBJECT SYSTEM AUDIT
-#“OL” 	OBJECT SYSTEM ALARM
+#ï¿½Aï¿½ 	ACCESS ALLOWED
+#ï¿½Dï¿½ 	ACCESS DENIED
+#ï¿½OAï¿½ 	OBJECT ACCESS ALLOWED: ONLY APPLIES TO A SUBSET OF THE OBJECT(S).
+#ï¿½ODï¿½ 	OBJECT ACCESS DENIED: ONLY APPLIES TO A SUBSET OF THE OBJECT(S).
+#ï¿½AUï¿½ 	SYSTEM AUDIT
+#ï¿½ALï¿½ 	SYSTEM ALARM
+#ï¿½OUï¿½ 	OBJECT SYSTEM AUDIT
+#ï¿½OLï¿½ 	OBJECT SYSTEM ALARM
 
 #1 ACE Flags
 #============
-#“CI” 	CONTAINER INHERIT: Child objects that are containers, such as directories, inherit the ACE as an explicit ACE.
-#“OI” 	OBJECT INHERIT: Child objects that are not containers inherit the ACE as an explicit ACE.
-#“NP” 	NO PROPAGATE: ONLY IMMEDIATE CHILDREN INHERIT THIS ACE.
-#“IO” 	INHERITANCE ONLY: ACE DOESN’T APPLY TO THIS OBJECT, BUT MAY AFFECT CHILDREN VIA INHERITANCE.
-#“ID” 	ACE IS INHERITED
-#“SA” 	SUCCESSFUL ACCESS AUDIT
-#“FA” 	FAILED ACCESS AUDIT
+#ï¿½CIï¿½ 	CONTAINER INHERIT: Child objects that are containers, such as directories, inherit the ACE as an explicit ACE.
+#ï¿½OIï¿½ 	OBJECT INHERIT: Child objects that are not containers inherit the ACE as an explicit ACE.
+#ï¿½NPï¿½ 	NO PROPAGATE: ONLY IMMEDIATE CHILDREN INHERIT THIS ACE.
+#ï¿½IOï¿½ 	INHERITANCE ONLY: ACE DOESNï¿½T APPLY TO THIS OBJECT, BUT MAY AFFECT CHILDREN VIA INHERITANCE.
+#ï¿½IDï¿½ 	ACE IS INHERITED
+#ï¿½SAï¿½ 	SUCCESSFUL ACCESS AUDIT
+#ï¿½FAï¿½ 	FAILED ACCESS AUDIT
 
 #2 Permissions Bits
 #============
-#“CC” 	Create All Child Objects Bit 0
-#“DC” 	Delete All Child Objects Bit 1
-#“LC” 	List Contents 	         Bit 2
-#“SW” 	All Validated Writes 	 Bit 3
-#“RP” 	Read All Properties 	 Bit 4
-#“WP” 	Write All Properties 	 Bit 5
-#“DT” 	Delete Subtree 	         Bit 6
-#“LO” 	List Object 	         Bit 7
-#“CR” 	All Extended Rights 	 Bit 8
+#ï¿½CCï¿½ 	Create All Child Objects Bit 0
+#ï¿½DCï¿½ 	Delete All Child Objects Bit 1
+#ï¿½LCï¿½ 	List Contents 	         Bit 2
+#ï¿½SWï¿½ 	All Validated Writes 	 Bit 3
+#ï¿½RPï¿½ 	Read All Properties 	 Bit 4
+#ï¿½WPï¿½ 	Write All Properties 	 Bit 5
+#ï¿½DTï¿½ 	Delete Subtree 	         Bit 6
+#ï¿½LOï¿½ 	List Object 	         Bit 7
+#ï¿½CRï¿½ 	All Extended Rights 	 Bit 8
 
-#“SD” 	Delete 	                 Bit 16
-#“RC” 	Read Permissions 	     Bit 17
-#“WD” 	Modify Permissions 	     Bit 18
-#“WO” 	Modify Owner 	         Bit 19
+#ï¿½SDï¿½ 	Delete 	                 Bit 16
+#ï¿½RCï¿½ 	Read Permissions 	     Bit 17
+#ï¿½WDï¿½ 	Modify Permissions 	     Bit 18
+#ï¿½WOï¿½ 	Modify Owner 	         Bit 19
 
-#“GA” 	GENERIC ALL              Bit 28
-#“GR” 	GENERIC READ 	         Bit 31
-#“GW” 	GENERIC WRITE 	         Bit 30
-#“GX” 	GENERIC EXECUTE 	     Bit 29
+#ï¿½GAï¿½ 	GENERIC ALL              Bit 28
+#ï¿½GRï¿½ 	GENERIC READ 	         Bit 31
+#ï¿½GWï¿½ 	GENERIC WRITE 	         Bit 30
+#ï¿½GXï¿½ 	GENERIC EXECUTE 	     Bit 29
     
 #File access rights
-#“FA” 	FILE ALL ACCESS
-#“FR” 	FILE GENERIC READ
-#“FW” 	FILE GENERIC WRITE
-#“FX” 	FILE GENERIC EXECUTE       
+#ï¿½FAï¿½ 	FILE ALL ACCESS
+#ï¿½FRï¿½ 	FILE GENERIC READ
+#ï¿½FWï¿½ 	FILE GENERIC WRITE
+#ï¿½FXï¿½ 	FILE GENERIC EXECUTE       
 
 
 
