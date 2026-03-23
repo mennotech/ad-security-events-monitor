@@ -43,7 +43,7 @@ A set of PowerShell scripts that monitor Active Directory security events and se
 
 ## Installation
 
-1. **Clone the repository** on the server that will run the scripts:
+1. **Download the scripts** on the server that will run the scripts:
 
    ```powershell
    git clone https://github.com/mennotech/ad-security-events-monitor.git
@@ -61,6 +61,68 @@ A set of PowerShell scripts that monitor Active Directory security events and se
    > **Note:** The `config\*-Settings.ps1` files are excluded from version control via `.gitignore` so your environment-specific values are never committed.
 
 3. **Edit each settings file** as described in the [Configuration](#configuration) section below.
+
+---
+
+## Deployment
+
+The recommended deployment approach is to **fork this repository** into your own GitHub organization and use a GitHub Actions workflow to automatically sign and deploy the scripts to your domain controllers.
+
+### How it works
+
+1. Fork this repository into your GitHub organization.
+2. Add the required code-signing secrets to the forked repository.
+3. Create the workflow file below in `.github/workflows/sign-and-deploy.yml`.
+4. Place your `config\*-Settings.ps1` files directly on the target servers — they are excluded from the deployment workflow so credentials are never committed or transferred through CI.
+
+The workflow uses the reusable workflow at [`mennotech/github-workflows`](https://github.com/mennotech/github-workflows). If you are deploying outside the Mennotech organization, replace the `uses:` reference with your own equivalent reusable workflow.
+
+### Required secrets
+
+| Secret | Description |
+|---|---|
+| `CODESIGN_PFX_BASE64` | Base64-encoded PFX file containing the code-signing certificate and private key |
+| `CODESIGN_PFX_PASSWORD` | Password protecting the PFX file |
+
+Add these in your fork under **Settings → Secrets and variables → Actions**.
+
+### Workflow file
+
+Create `.github/workflows/sign-and-deploy.yml` in your fork:
+
+```yaml
+name: Sign and Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  sign_and_deploy:
+    name: Sign scripts and deploy
+    uses: mennotech/github-workflows/.github/workflows/sign-and-deploy-windows.yml@v1
+    permissions:
+      contents: read
+    secrets:
+      CODESIGN_PFX_BASE64: ${{ secrets.CODESIGN_PFX_BASE64 }}
+      CODESIGN_PFX_PASSWORD: ${{ secrets.CODESIGN_PFX_PASSWORD }}
+    with:
+      runner_group: SCS Domain Controllers   # name of your self-hosted runner group on the domain controllers
+      destination_path: C:\Scripts\ad-security-events-monitor
+      exclude_dirs:                           # comma-separated list of directories to skip; leave empty to include all
+      exclude_files: '*Settings.ps1'
+```
+
+> **`exclude_files: '*Settings.ps1'`** ensures your environment-specific settings files (which contain server names, email addresses, and other local configuration) are never overwritten by the deployment workflow.
+
+### After deployment
+
+Once the workflow has run, the scripts will be present at `C:\Scripts\ad-security-events-monitor` on your domain controllers. Set up the Task Scheduler tasks as described in the [Scheduling with Task Scheduler](#scheduling-with-task-scheduler) section, pointing at that path.
+
 
 ---
 
@@ -163,67 +225,6 @@ schtasks /create /tn "File Security Events Monitor" /xml "File Security Events M
 5. Click **OK** to save.
 
 > The default trigger in each XML runs the script every **5 minutes**. Adjust the trigger interval to match the `$Interval` value in your settings file.
-
----
-
-## Deployment
-
-The recommended deployment approach is to **fork this repository** into your own GitHub organization and use a GitHub Actions workflow to automatically sign and deploy the scripts to your domain controllers.
-
-### How it works
-
-1. Fork this repository into your GitHub organization.
-2. Add the required code-signing secrets to the forked repository.
-3. Create the workflow file below in `.github/workflows/sign-and-deploy.yml`.
-4. Place your `config\*-Settings.ps1` files directly on the target servers — they are excluded from the deployment workflow so credentials are never committed or transferred through CI.
-
-The workflow uses the reusable workflow at [`mennotech/github-workflows`](https://github.com/mennotech/github-workflows). If you are deploying outside the Mennotech organization, replace the `uses:` reference with your own equivalent reusable workflow.
-
-### Required secrets
-
-| Secret | Description |
-|---|---|
-| `CODESIGN_PFX_BASE64` | Base64-encoded PFX file containing the code-signing certificate and private key |
-| `CODESIGN_PFX_PASSWORD` | Password protecting the PFX file |
-
-Add these in your fork under **Settings → Secrets and variables → Actions**.
-
-### Workflow file
-
-Create `.github/workflows/sign-and-deploy.yml` in your fork:
-
-```yaml
-name: Sign and Deploy
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [ "main" ]
-
-permissions:
-  contents: read
-
-jobs:
-  sign_and_deploy:
-    name: Sign scripts and deploy
-    uses: mennotech/github-workflows/.github/workflows/sign-and-deploy-windows.yml@v1
-    permissions:
-      contents: read
-    secrets:
-      CODESIGN_PFX_BASE64: ${{ secrets.CODESIGN_PFX_BASE64 }}
-      CODESIGN_PFX_PASSWORD: ${{ secrets.CODESIGN_PFX_PASSWORD }}
-    with:
-      runner_group: SCS Domain Controllers   # name of your self-hosted runner group on the domain controllers
-      destination_path: C:\Scripts\ad-security-events-monitor
-      exclude_dirs:                           # comma-separated list of directories to skip; leave empty to include all
-      exclude_files: '*Settings.ps1'
-```
-
-> **`exclude_files: '*Settings.ps1'`** ensures your environment-specific settings files (which contain server names, email addresses, and other local configuration) are never overwritten by the deployment workflow.
-
-### After deployment
-
-Once the workflow has run, the scripts will be present at `C:\Scripts\ad-security-events-monitor` on your domain controllers. Set up the Task Scheduler tasks as described in the [Scheduling with Task Scheduler](#scheduling-with-task-scheduler) section, pointing at that path.
 
 ---
 
