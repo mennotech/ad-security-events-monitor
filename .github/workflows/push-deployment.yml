@@ -75,15 +75,33 @@ jobs:
         run: |
           set -euo pipefail
 
+          failures=0
           IFS=',' read -r -a repos <<< "${REPOS}"
           for name in "${repos[@]}"; do
             name="$(echo "$name" | xargs)"
             [ -z "$name" ] && continue
 
             echo "Dispatching to ${OWNER}/${name}"
-            curl -sS -X POST \
+            response_file="$(mktemp)"
+            status_code="$(curl -sS -o "${response_file}" -w "%{http_code}" -X POST \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
               https://api.github.com/repos/${OWNER}/${name}/dispatches \
-              -d "{\"event_type\":\"${EVENT_TYPE}\"}"
+              -d "{\"event_type\":\"${EVENT_TYPE}\"}")"
+
+            if [ "${status_code}" = "204" ]; then
+              echo "Dispatch OK for ${OWNER}/${name}"
+            else
+              echo "Dispatch FAILED for ${OWNER}/${name} (HTTP ${status_code})"
+              cat "${response_file}"
+              failures=$((failures + 1))
+            fi
+
+            rm -f "${response_file}"
           done
+
+          if [ "${failures}" -gt 0 ]; then
+            echo "${failures} repository dispatch request(s) failed."
+            exit 1
+          fi
