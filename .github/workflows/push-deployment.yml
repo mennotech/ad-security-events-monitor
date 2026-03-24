@@ -1,0 +1,47 @@
+name: Dispatch Downstream Deployments
+
+on:
+  push:
+    branches: [testing, main]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create app token
+        id: app_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.DEPLOY_APP_ID }}
+          private-key: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+
+      - name: Dispatch to downstream repos
+        env:
+          DISPATCH_TOKEN: ${{ steps.app_token.outputs.token }}
+          DOWNSTREAM_REPOS: ${{ vars.DOWNSTREAM_REPOS }}
+          EVENT_TYPE: ${{ github.ref_name == 'testing' && 'script-deploy-testing' || 'script-deploy-broad' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${DOWNSTREAM_REPOS}" ]; then
+            echo "DOWNSTREAM_REPOS is empty."
+            exit 1
+          fi
+
+          while IFS= read -r repo; do
+            repo="$(echo "$repo" | xargs)"
+            if [ -z "$repo" ]; then
+              continue
+            fi
+
+            echo "Dispatching to $repo"
+            curl -sS -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
+              https://api.github.com/repos/${repo}/dispatches \
+              -d "{\"event_type\":\"${EVENT_TYPE}\"}"
+          done <<< "${DOWNSTREAM_REPOS}"
