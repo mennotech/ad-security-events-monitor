@@ -1,0 +1,30 @@
+---
+name: Dispatch Downstream Deployments
+
+on:
+  push:
+    branches: [testing, main]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch-testing:
+    if: github.ref_name == 'testing'
+    uses: mennotech/github-workflows/.github/workflows/dispatch-downstream-deployments.yml@feature/dispatch-downstream-deployments
+    with:
+      downstream_repos: ${{ vars.DOWNSTREAM_REPOS }}
+      event_type: script-deploy-testing
+    secrets:
+      app_id: ${{ secrets.DEPLOY_APP_ID }}
+      app_private_key: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+
+  dispatch-broad:
+    if: github.ref_name == 'main'
+    uses: mennotech/github-workflows/.github/workflows/dispatch-downstream-deployments.yml@feature/dispatch-downstream-deployments
+    with:
+      downstream_repos: ${{ vars.DOWNSTREAM_REPOS }}
+      event_type: script-deploy-broad
+    secrets:
+      app_id: ${{ secrets.DEPLOY_APP_ID }}
+      app_private_key: ${{ secrets.DEPLOY_PRIVATE_KEY }}
