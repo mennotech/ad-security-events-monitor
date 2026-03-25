@@ -3,7 +3,7 @@ name: Dispatch Downstream Deployments
 
 on:
   push:
-    branches: [testing, main]
+    branches: [dev, testing, main]
 
 permissions:
   contents: read
